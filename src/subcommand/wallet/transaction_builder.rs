@@ -107,6 +107,7 @@ pub struct TransactionBuilder {
   unused_change_addresses: Vec<Address>,
   utxos: BTreeSet<OutPoint>,
   target: Target,
+  spend_utxo: Option<OutPoint>,
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -125,6 +126,7 @@ impl TransactionBuilder {
     recipient: Address,
     change: [Address; 2],
     fee_rate: FeeRate,
+    spend_utxo: Option<OutPoint>,
   ) -> Result<Transaction> {
     Self::new(
       outgoing,
@@ -134,6 +136,7 @@ impl TransactionBuilder {
       change,
       fee_rate,
       Target::Postage,
+      spend_utxo,
     )?
     .build_transaction()
   }
@@ -146,6 +149,7 @@ impl TransactionBuilder {
     change: [Address; 2],
     fee_rate: FeeRate,
     output_value: Amount,
+    spend_utxo: Option<OutPoint>,
   ) -> Result<Transaction> {
     let dust_value = recipient.script_pubkey().dust_value();
 
@@ -164,6 +168,7 @@ impl TransactionBuilder {
       change,
       fee_rate,
       Target::Value(output_value),
+      spend_utxo,
     )?
     .build_transaction()
   }
@@ -187,6 +192,7 @@ impl TransactionBuilder {
     change: [Address; 2],
     fee_rate: FeeRate,
     target: Target,
+    spend_utxo: Option<OutPoint>,
   ) -> Result<Self> {
     if change.contains(&recipient) {
       return Err(Error::DuplicateAddress(recipient));
@@ -208,6 +214,7 @@ impl TransactionBuilder {
       recipient,
       unused_change_addresses: change.to_vec(),
       target,
+      spend_utxo,
     })
   }
 
@@ -286,8 +293,8 @@ impl TransactionBuilder {
         let (utxo, size) = self.select_cardinal_utxo(dust_limit - self.outputs[0].1)?;
         self.inputs.insert(0, utxo);
         self.outputs[0].1 += size;
-        tprintln!(
-          "padded alignment output to {} with additional {size} sat input",
+        log::info!(
+          "padded alignment output to {} with additional {size} sat input from utxo {utxo}",
           self.outputs[0].1
         );
       }
@@ -645,6 +652,18 @@ impl TransactionBuilder {
         continue;
       }
 
+      if let Some(spend_utxo) = self.spend_utxo {
+        if spend_utxo != *utxo {
+          log::info!(
+            "attempted to spend utxo {} but only utxo {:?} can be spent",
+            *utxo,
+            spend_utxo,
+          );
+
+          continue;
+        }
+      }
+
       let value = self.amounts[utxo];
 
       if value >= minimum_value {
@@ -654,6 +673,8 @@ impl TransactionBuilder {
     }
 
     let (utxo, value) = found.ok_or(Error::NotEnoughCardinalUtxos)?;
+
+    log::info!("Using UTXO {} for fees", utxo);
 
     self.utxos.remove(&utxo);
 

@@ -37,6 +37,8 @@ pub(crate) struct Inscribe {
     help = "Use <COMMIT_FEE_RATE> sats/vbyte for commit transaction.\nDefaults to <FEE_RATE> if unset."
   )]
   pub(crate) commit_fee_rate: Option<FeeRate>,
+  #[clap(long, help = "Only spend <SPEND_UTXO> for postage and fees.")]
+  pub(crate) spend_utxo: Option<OutPoint>,
   #[clap(help = "Inscribe sat with contents of <FILE>")]
   pub(crate) file: PathBuf,
   #[clap(long, help = "Do not back up recovery key.")]
@@ -84,6 +86,7 @@ impl Inscribe {
         self.commit_fee_rate.unwrap_or(self.fee_rate),
         self.fee_rate,
         self.no_limit,
+        self.spend_utxo,
       )?;
 
     utxos.insert(
@@ -151,6 +154,7 @@ impl Inscribe {
     commit_fee_rate: FeeRate,
     reveal_fee_rate: FeeRate,
     no_limit: bool,
+    spend_utxo: Option<OutPoint>,
   ) -> Result<(Transaction, Transaction, TweakedKeyPair)> {
     let satpoint = if let Some(satpoint) = satpoint {
       satpoint
@@ -224,6 +228,7 @@ impl Inscribe {
       change,
       commit_fee_rate,
       reveal_fee + TransactionBuilder::TARGET_POSTAGE,
+      spend_utxo,
     )?;
 
     let (vout, output) = unsigned_commit_tx

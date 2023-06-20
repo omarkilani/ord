@@ -6,6 +6,8 @@ pub(crate) struct Send {
   outgoing: Outgoing,
   #[clap(long, help = "Use fee rate of <FEE_RATE> sats/vB")]
   fee_rate: FeeRate,
+  #[clap(long, help = "Only spend <SPEND_UTXO> for postage and fees.")]
+  spend_utxo: OutPoint,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -52,10 +54,11 @@ impl Send {
 
         let wallet_inscription_outputs = unspent_outputs
           .keys()
-          .filter(|utxo| all_inscription_outputs.contains(utxo))
+          .filter(|utxo| all_inscription_outputs.contains(utxo) || **utxo != self.spend_utxo)
           .cloned()
           .collect::<Vec<OutPoint>>();
 
+        log::info!("Locking outputs: {:?}", wallet_inscription_outputs);
         if !client.lock_unspent(&wallet_inscription_outputs)? {
           bail!("failed to lock ordinal UTXOs");
         }
@@ -78,6 +81,7 @@ impl Send {
       self.address,
       change,
       self.fee_rate,
+      Some(self.spend_utxo),
     )?;
 
     let signed_tx = client

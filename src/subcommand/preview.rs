@@ -79,6 +79,7 @@ impl Preview {
         subcommand: Subcommand::Wallet(super::wallet::Wallet::Inscribe(
           super::wallet::inscribe::Inscribe {
             fee_rate: FeeRate::try_from(1.0).unwrap(),
+            spend_utxo: None,
             commit_fee_rate: None,
             file,
             no_backup: true,
